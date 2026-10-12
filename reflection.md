@@ -5,7 +5,15 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
+  PawPal+ helps a busy pet owner stay consistent with pet care. The core user needs are: (1) record the pet's care tasks, (2) tell the app how much time they have and what they prefer, and (3) get a daily plan with an explanation of why it was chosen. I started from those needs and kept one class per concept: the people and animals (Owner, Pet), the work to be done (Task), and the planning logic (Scheduler). Owner has many Pets, a Pet has many Tasks, and the Scheduler reads from the Owner to build the plan. The Streamlit UI only calls these classes and holds no scheduling logic.
+
 - What classes did you include, and what responsibilities did you assign to each?
+  - **Task**: one care activity (walk, feeding, meds, enrichment, grooming). Holds title, duration, priority, category, an optional preferred time, a completed flag and an optional frequency (daily/weekly). Duration and priority are the minimum the scheduler needs, so they are required.
+  - **Pet**: holds the pet's basic info (name, species, age) and owns its list of Tasks. It can add, remove and list pending tasks. Putting tasks here lets one owner have several pets.
+  - **Owner**: holds the owner's constraints, meaning the time available per day and preferences (for example, no walks late at night), plus their Pets. Constraints live here so the Scheduler stays reusable.
+  - **Scheduler**: the only class that makes decisions. It collects the owner's tasks, sorts them by priority then duration, fits them into the available time, flags overlapping slots, handles recurring tasks, and produces an explanation for each task it scheduled or skipped. Keeping this in one place makes it easy to unit test.
+
+  I kept the scope to four classes to keep the first version small. If the explanation output gets awkward, I would add a small `ScheduledItem` (task, start time, reason) as a fifth class rather than returning loose tuples.
 
 **b. Design changes**
 
