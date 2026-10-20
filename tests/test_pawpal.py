@@ -170,3 +170,40 @@ def test_back_to_back_tasks_do_not_conflict():
     dog.add_task(Task("Feeding", 10, preferred_time="08:30"))
 
     assert Scheduler(owner).conflict_warnings() == []
+
+
+def test_pet_with_no_tasks_yields_empty_results():
+    owner, _, _ = _owner_with_pets()
+    scheduler = Scheduler(owner)
+
+    assert scheduler.generate_plan() == []
+    assert scheduler.sort_by_time() == []
+    assert scheduler.conflict_warnings() == []
+    assert scheduler.explain_plan() == "No pending tasks to plan."
+
+
+def test_owner_with_no_pets_yields_empty_plan():
+    assert Scheduler(Owner("Jordan", 60)).generate_plan() == []
+
+
+def test_identical_start_times_are_flagged_and_keep_priority_order():
+    owner, dog, _ = _owner_with_pets()
+    low = Task("Brush", 10, "low", preferred_time="08:00")
+    high = Task("Meds", 10, "high", preferred_time="08:00")
+    dog.add_task(low)
+    dog.add_task(high)
+    scheduler = Scheduler(owner)
+
+    assert [t.title for t in scheduler.generate_plan()] == ["Meds", "Brush"]
+    assert len(scheduler.detect_conflicts()) == 1
+
+
+def test_zero_time_budget_skips_everything():
+    owner = Owner("Jordan", 0)
+    pet = Pet("Mochi", "dog")
+    owner.add_pet(pet)
+    pet.add_task(Task("Walk", 30, "high"))
+    scheduler = Scheduler(owner)
+
+    assert scheduler.generate_plan() == []
+    assert len(scheduler.skipped) == 1

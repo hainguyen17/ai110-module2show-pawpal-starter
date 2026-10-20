@@ -112,22 +112,32 @@ Known limit: `Owner.preferences` is not used by the scheduler yet.
 ## 🧪 Testing PawPal+
 
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
+
+**What the 18 tests cover**
+
+- **Sorting:** tasks come back in chronological `HH:MM` order, with untimed tasks last.
+- **Recurrence:** completing a daily task creates a copy due the next day, and a weekly task creates one due 7 days out. One-off tasks and double completion create nothing.
+- **Conflict detection:** overlapping windows are flagged (same pet and across pets), identical start times are flagged, and back-to-back tasks are not.
+- **Planning:** high priority wins when time is short, completed and future-dated tasks are excluded, and a zero-minute budget skips everything.
+- **Edge cases:** a pet with no tasks, an owner with no pets, and filtering by pet and status.
 
 Sample test output:
 
 ```
-collected 14 items
+============================= test session starts ==============================
+platform darwin -- Python 3.13.7, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/tiffanymhai/Developer/ai110-module2show-pawpal-starter
+plugins: anyio-4.15.1
+collected 18 items
 
-tests/test_pawpal.py ..............                                      [100%]
+tests/test_pawpal.py ..................                                  [100%]
 
-============================== 14 passed in 0.02s ===============================
+============================== 18 passed in 0.03s ==============================
 ```
+
+**Confidence level: ⭐⭐⭐⭐ (4/5).** All core behaviors and the main edge cases pass. Not yet tested: malformed `HH:MM` strings, tasks that cross midnight, and `Owner.preferences` (unused by the scheduler).
 
 ## 📐 Smarter Scheduling
 
