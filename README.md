@@ -42,59 +42,16 @@ pip install -r requirements.txt
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
 
-## 🖥️ Sample Output
+## ✨ Features
 
-Output of `python main.py` (owner Jordan, 90 minutes available, two pets, tasks added out of order):
-
-```
-
-Today's Schedule for Jordan (80/90 min used)
---------------------------------------------
-08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
-08:00  Morning walk       Mochi   30 min  [high] (todo, due 2026-10-20)
-12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
-18:00  Brush coat         Mochi   20 min  [low] (todo, due 2026-10-20)
-19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
-Skipped (not enough time): Training session (Mochi)
-
-Why this plan?
---------------
-- Give medication (Luna): scheduled: high priority, fits (85 min left)
-- Feeding (Luna): scheduled: high priority, fits (75 min left)
-- Morning walk (Mochi): scheduled: high priority, fits (45 min left)
-- Laser play (Luna): scheduled: medium priority, fits (30 min left)
-- Training session (Mochi): skipped: needs 45 min but only 30 min left
-- Brush coat (Mochi): scheduled: low priority, fits (10 min left)
-
-Conflict warnings
------------------
-Warning: Feeding at 08:00 overlaps Morning walk at 08:00 (Luna and Mochi)
-
-All tasks sorted by time (added out of order)
----------------------------------------------
-08:00  Morning walk       Mochi   30 min  [high] (todo, due 2026-10-20)
-08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
-12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
-18:00  Brush coat         Mochi   20 min  [low] (todo, due 2026-10-20)
-19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
---:--  Training session   Mochi   45 min  [medium] (todo, due 2026-10-20)
-
-Filter: Luna's tasks
---------------------
-19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
-12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
-08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
-
-Recurring: complete the daily Morning walk
-------------------------------------------
-Completed: Morning walk (due 2026-10-20)
-Next occurrence created: Morning walk, due 2026-10-21
-
-Filter: completed tasks / still-to-do tasks
--------------------------------------------
-done: ['Morning walk']
-todo: ['Brush coat', 'Training session', 'Morning walk', 'Laser play', 'Give medication', 'Feeding']
-```
+- **Multi-pet planning:** one daily plan across every pet an owner has.
+- **Priority-based selection:** tasks are taken high, then medium, then low priority (shortest first within a priority) until the owner's daily minutes run out. Tasks that don't fit are skipped, not dropped silently.
+- **Sorting by time:** `sort_by_time()` orders tasks by `HH:MM` preferred time, with untimed tasks last. The sort is stable, so ties keep priority order.
+- **Filtering:** `filter_tasks()` narrows tasks by pet, by completion status, or both.
+- **Conflict warnings:** `conflict_warnings()` flags any two planned tasks whose time windows (start plus duration) overlap, for the same pet or different pets. It returns readable messages instead of raising errors. Back-to-back tasks are not conflicts.
+- **Daily and weekly recurrence:** completing a recurring task marks it done and adds a new copy to the same pet, due the next day or 7 days later.
+- **Due dates:** only tasks due today or earlier are planned, so tomorrow's recurring copy stays out of today's plan.
+- **Plan explanations:** `explain_plan()` gives a plain-language reason for each scheduled or skipped task.
 
 ## 🧩 Implementation Summary
 
@@ -153,12 +110,84 @@ Tradeoff: conflicts are only reported, not resolved, and only tasks that made it
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+Run the app with `streamlit run app.py`.
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+**What you can do in the UI**
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+- Set the owner's name and how many minutes are available today.
+- Add pets (dog, cat, or other).
+- Add tasks to a pet with a duration, priority, optional preferred time, and how often it repeats (once, daily, weekly).
+- View all tasks in a table sorted by time, and filter it by pet and by status (all, to do, done).
+- Mark a task complete. A daily or weekly task shows a message with the date of its next occurrence.
+- Click **Generate schedule** to see today's plan, anything skipped, any conflicts, and the reasoning.
+
+**Example workflow**
+
+1. Add a pet named Mochi (dog) and another named Luna (cat).
+2. Add "Morning walk" for Mochi (30 min, high, 08:00, daily) and "Feeding" for Luna (10 min, high, 08:00, daily).
+3. Add a few more tasks, in any order. The task table still shows them sorted by time.
+4. Filter the table to Luna to see only her tasks.
+5. Click **Generate schedule**. The plan appears as a table ordered by time, with a success message showing the minutes used.
+6. Mark "Morning walk" complete. A new copy due tomorrow is added, and it will not appear in today's plan.
+
+**Scheduler behaviors you will see**
+
+- **Sorting:** tasks are listed in chronological order no matter what order they were added.
+- **Conflict warnings:** the 08:00 walk and the 08:00 feeding overlap, so the UI shows an error banner with the count, one warning per overlapping pair (naming both tasks and pets), and a hint to move one of them to a different time. If nothing overlaps it shows a green confirmation instead.
+- **Skipped tasks:** tasks that don't fit in the available minutes are listed with a suggestion to raise the time budget.
+- **Recurrence:** completing a daily or weekly task creates the next occurrence.
+
+**Sample CLI output** from `python main.py` (owner Jordan, 90 minutes available, two pets, tasks added out of order):
+
+```
+Today's Schedule for Jordan (80/90 min used)
+--------------------------------------------
+08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
+08:00  Morning walk       Mochi   30 min  [high] (todo, due 2026-10-20)
+12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
+18:00  Brush coat         Mochi   20 min  [low] (todo, due 2026-10-20)
+19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
+Skipped (not enough time): Training session (Mochi)
+
+Why this plan?
+--------------
+- Give medication (Luna): scheduled: high priority, fits (85 min left)
+- Feeding (Luna): scheduled: high priority, fits (75 min left)
+- Morning walk (Mochi): scheduled: high priority, fits (45 min left)
+- Laser play (Luna): scheduled: medium priority, fits (30 min left)
+- Training session (Mochi): skipped: needs 45 min but only 30 min left
+- Brush coat (Mochi): scheduled: low priority, fits (10 min left)
+
+Conflict warnings
+-----------------
+Warning: Feeding at 08:00 overlaps Morning walk at 08:00 (Luna and Mochi)
+
+All tasks sorted by time (added out of order)
+---------------------------------------------
+08:00  Morning walk       Mochi   30 min  [high] (todo, due 2026-10-20)
+08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
+12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
+18:00  Brush coat         Mochi   20 min  [low] (todo, due 2026-10-20)
+19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
+--:--  Training session   Mochi   45 min  [medium] (todo, due 2026-10-20)
+
+Filter: Luna's tasks
+--------------------
+19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
+12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
+08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
+
+Recurring: complete the daily Morning walk
+------------------------------------------
+Completed: Morning walk (due 2026-10-20)
+Next occurrence created: Morning walk, due 2026-10-21
+
+Filter: completed tasks / still-to-do tasks
+-------------------------------------------
+done: ['Morning walk']
+todo: ['Brush coat', 'Training session', 'Morning walk', 'Laser play', 'Give medication', 'Feeding']
+```
+
+## 🏗️ Architecture
+
+The final class diagram is in [diagrams/uml_final.mmd](diagrams/uml_final.mmd). The earlier draft is [diagrams/uml.mmd](diagrams/uml.mmd).
