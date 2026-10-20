@@ -134,7 +134,7 @@ collected 18 items
 
 tests/test_pawpal.py ..................                                  [100%]
 
-============================== 18 passed in 0.03s ==============================
+============================== 18 passed in 0.02s ==============================
 ```
 
 **Confidence level: ⭐⭐⭐⭐ (4/5).** All core behaviors and the main edge cases pass. Not yet tested: malformed `HH:MM` strings, tasks that cross midnight, and `Owner.preferences` (unused by the scheduler).
