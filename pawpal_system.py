@@ -1,12 +1,15 @@
 """PawPal+ core domain model: tasks, pets, owner, and the scheduler."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import date, timedelta
+from itertools import combinations
 from typing import Literal, Optional
 
 Priority = Literal["high", "medium", "low"]
 Frequency = Literal["once", "daily", "weekly"]
 
 PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
+RECURRENCE_DAYS = {"daily": 1, "weekly": 7}
 
 
 def _to_minutes(hhmm: str) -> int:
@@ -25,10 +28,18 @@ class Task:
     preferred_time: Optional[str] = None  # "HH:MM", 24-hour
     frequency: Frequency = "once"
     completed: bool = False
+    due_date: date = field(default_factory=date.today)
 
-    def mark_complete(self) -> None:
-        """Mark this task as done."""
+    def mark_complete(self, today: Optional[date] = None) -> Optional["Task"]:
+        """Mark this task done; for daily/weekly tasks return a fresh copy due next time."""
+        if self.completed:
+            return None
         self.completed = True
+        interval = RECURRENCE_DAYS.get(self.frequency)
+        if interval is None:
+            return None
+        next_due = (today or date.today()) + timedelta(days=interval)
+        return replace(self, completed=False, due_date=next_due)
 
 
 @dataclass
@@ -73,17 +84,39 @@ class Owner:
 class Scheduler:
     """Builds and explains a daily plan from an owner's tasks and constraints."""
 
-    def __init__(self, owner: Owner) -> None:
+    def __init__(self, owner: Owner, today: Optional[date] = None) -> None:
         self.owner = owner
+        self.today = today or date.today()
         self.skipped: list[Task] = []
         self._reasons: list[tuple[Task, str]] = []
 
+    def sort_by_time(self, tasks: Optional[list[Task]] = None) -> list[Task]:
+        """Return tasks ordered by "HH:MM" preferred time, with untimed tasks last."""
+        if tasks is None:
+            tasks = self.owner.get_all_tasks()
+        # "HH:MM" strings sort correctly as text; the tuple pushes None to the end.
+        return sorted(tasks, key=lambda t: (t.preferred_time is None, t.preferred_time or ""))
+
+    def filter_tasks(
+        self, pet_name: Optional[str] = None, completed: Optional[bool] = None
+    ) -> list[Task]:
+        """Return tasks for one pet and/or one completion status; None means no filter."""
+        return [
+            task
+            for pet in self.owner.pets
+            if pet_name is None or pet.name == pet_name
+            for task in pet.tasks
+            if completed is None or task.completed == completed
+        ]
+
     def generate_plan(self) -> list[Task]:
-        """Pick the highest-priority pending tasks that fit the time budget, ordered by time."""
+        """Pick the highest-priority tasks due today that fit the time budget, ordered by time."""
         self.skipped = []
         self._reasons = []
         remaining = self.owner.available_minutes_per_day
-        pending = [t for t in self.owner.get_all_tasks() if not t.completed]
+        pending = [
+            t for t in self.owner.get_all_tasks() if not t.completed and t.due_date <= self.today
+        ]
         pending.sort(key=lambda t: (PRIORITY_RANK[t.priority], t.duration_minutes))
 
         plan: list[Task] = []
@@ -100,36 +133,47 @@ class Scheduler:
                     (task, f"skipped: needs {task.duration_minutes} min but only {remaining} min left")
                 )
 
-        # Timed tasks first in clock order; untimed ones after, highest priority first.
-        plan.sort(
-            key=lambda t: (
-                t.preferred_time is None,
-                t.preferred_time or "",
-                PRIORITY_RANK[t.priority],
-            )
-        )
-        return plan
+        # Sorting is stable, so tasks at the same time (or untimed) stay in priority order.
+        return self.sort_by_time(plan)
 
     def detect_conflicts(self) -> list[tuple[Task, Task]]:
-        """Return pairs of planned tasks whose time slots overlap."""
+        """Return pairs of planned tasks whose time slots overlap (same or different pets)."""
         timed = [t for t in self.generate_plan() if t.preferred_time]
-        conflicts = []
-        for i, a in enumerate(timed):
-            a_start = _to_minutes(a.preferred_time)
-            a_end = a_start + a.duration_minutes
-            for b in timed[i + 1 :]:
-                b_start = _to_minutes(b.preferred_time)
-                b_end = b_start + b.duration_minutes
-                if a_start < b_end and b_start < a_end:
-                    conflicts.append((a, b))
-        return conflicts
+
+        def overlaps(a: Task, b: Task) -> bool:
+            a_start, b_start = _to_minutes(a.preferred_time), _to_minutes(b.preferred_time)
+            return a_start < b_start + b.duration_minutes and b_start < a_start + a.duration_minutes
+
+        return [(a, b) for a, b in combinations(timed, 2) if overlaps(a, b)]
+
+    def conflict_warnings(self) -> list[str]:
+        """Return a readable warning for each overlap instead of raising an error."""
+        warnings = []
+        for a, b in self.detect_conflicts():
+            pet_a, pet_b = self.pet_name_for(a), self.pet_name_for(b)
+            who = f"for {pet_a}" if pet_a == pet_b else f"({pet_a} and {pet_b})"
+            warnings.append(
+                f"Warning: {a.title} at {a.preferred_time} overlaps {b.title} "
+                f"at {b.preferred_time} {who}"
+            )
+        return warnings
+
+    def mark_task_complete(self, task: Task) -> Optional[Task]:
+        """Complete a task and, if it recurs, add its next occurrence to the same pet."""
+        pet = self._pet_of(task)
+        next_task = task.mark_complete(self.today)
+        if pet is not None and next_task is not None:
+            pet.add_task(next_task)
+        return next_task
+
+    def _pet_of(self, task: Task) -> Optional[Pet]:
+        """Find the pet that owns this exact task object."""
+        return next((p for p in self.owner.pets if any(t is task for t in p.tasks)), None)
 
     def pet_name_for(self, task: Task) -> str:
         """Return the name of the pet that owns this task."""
-        for pet in self.owner.pets:
-            if any(t is task for t in pet.tasks):
-                return pet.name
-        return "unknown"
+        pet = self._pet_of(task)
+        return pet.name if pet else "unknown"
 
     def explain_plan(self) -> str:
         """Explain why each task was scheduled or skipped."""

@@ -33,6 +33,7 @@
 
 - Describe one tradeoff your scheduler makes.
   It is greedy: it takes tasks in priority order (shortest first within a priority) and skips any task that does not fit in the time left, then keeps going with smaller ones. That does not always give the best possible use of the day, and it does not move tasks to avoid conflicts. It only reports them.
+  A second tradeoff is conflict handling. The scheduler checks whether the time windows (start plus duration) of planned tasks overlap, which is more accurate than only comparing exact start times. But it only reports a warning and never moves a task, and it only checks tasks that made it into the plan.
 - Why is that tradeoff reasonable for this scenario?
   A pet owner needs a plan that is simple to follow and easy to explain. The greedy rule is predictable, and each skipped task gets a plain-language reason. Finding the mathematically optimal plan would add complexity the scenario does not need.
 

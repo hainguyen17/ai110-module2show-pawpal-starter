@@ -6,7 +6,8 @@ classDiagram
         +str preferred_time
         +str frequency
         +bool completed
-        +mark_complete() None
+        +date due_date
+        +mark_complete() Task
     }
 
     class Pet {
@@ -29,9 +30,14 @@ classDiagram
 
     class Scheduler {
         +Owner owner
+        +date today
         +list~Task~ skipped
+        +sort_by_time(tasks) list~Task~
+        +filter_tasks(pet_name, completed) list~Task~
         +generate_plan() list~Task~
         +detect_conflicts() list~tuple~
+        +conflict_warnings() list~str~
+        +mark_task_complete(task) Task
         +pet_name_for(task) str
         +explain_plan() str
     }

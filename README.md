@@ -44,30 +44,56 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Output of `python main.py` (owner Jordan, 90 minutes available, two pets):
+Output of `python main.py` (owner Jordan, 90 minutes available, two pets, tasks added out of order):
 
 ```
+
 Today's Schedule for Jordan (80/90 min used)
---------------------------------------------------------
-08:00  Morning walk       Mochi   30 min  [high]
-08:15  Feeding            Luna    10 min  [high]
-12:00  Give medication    Luna     5 min  [high]
-18:00  Brush coat         Mochi   20 min  [low]
-19:00  Laser play         Luna    15 min  [medium]
+--------------------------------------------
+08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
+08:00  Morning walk       Mochi   30 min  [high] (todo, due 2026-10-20)
+12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
+18:00  Brush coat         Mochi   20 min  [low] (todo, due 2026-10-20)
+19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
+Skipped (not enough time): Training session (Mochi)
 
-Skipped (not enough time):
-  Training session (Mochi, 45 min)
-
-Time conflicts:
-  Morning walk (08:00) overlaps Feeding (08:15)
-
-Why this plan:
+Why this plan?
+--------------
 - Give medication (Luna): scheduled: high priority, fits (85 min left)
 - Feeding (Luna): scheduled: high priority, fits (75 min left)
 - Morning walk (Mochi): scheduled: high priority, fits (45 min left)
 - Laser play (Luna): scheduled: medium priority, fits (30 min left)
 - Training session (Mochi): skipped: needs 45 min but only 30 min left
 - Brush coat (Mochi): scheduled: low priority, fits (10 min left)
+
+Conflict warnings
+-----------------
+Warning: Feeding at 08:00 overlaps Morning walk at 08:00 (Luna and Mochi)
+
+All tasks sorted by time (added out of order)
+---------------------------------------------
+08:00  Morning walk       Mochi   30 min  [high] (todo, due 2026-10-20)
+08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
+12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
+18:00  Brush coat         Mochi   20 min  [low] (todo, due 2026-10-20)
+19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
+--:--  Training session   Mochi   45 min  [medium] (todo, due 2026-10-20)
+
+Filter: Luna's tasks
+--------------------
+19:00  Laser play         Luna    15 min  [medium] (todo, due 2026-10-20)
+12:00  Give medication    Luna     5 min  [high] (todo, due 2026-10-20)
+08:00  Feeding            Luna    10 min  [high] (todo, due 2026-10-20)
+
+Recurring: complete the daily Morning walk
+------------------------------------------
+Completed: Morning walk (due 2026-10-20)
+Next occurrence created: Morning walk, due 2026-10-21
+
+Filter: completed tasks / still-to-do tasks
+-------------------------------------------
+done: ['Morning walk']
+todo: ['Brush coat', 'Training session', 'Morning walk', 'Laser play', 'Give medication', 'Feeding']
 ```
 
 ## 🧩 Implementation Summary
@@ -77,11 +103,11 @@ The logic layer lives in `pawpal_system.py` and has four classes:
 - **Task** (dataclass): one care activity with a title, duration, priority, optional preferred time (`HH:MM`), frequency and completion flag.
 - **Pet** (dataclass): a pet's name and species, plus its list of tasks.
 - **Owner** (dataclass): the daily time budget and the owner's pets. `get_all_tasks()` returns every pet's tasks together.
-- **Scheduler**: reads tasks through `Owner.get_all_tasks()`, so it plans across all pets. `generate_plan()` takes pending tasks by priority (then shortest first) until the time budget runs out, then orders the result by preferred time. `detect_conflicts()` finds overlapping slots, and `explain_plan()` says why each task was scheduled or skipped.
+- **Scheduler**: reads tasks through `Owner.get_all_tasks()`, so it plans across all pets. `generate_plan()` takes pending tasks due today by priority (then shortest first) until the time budget runs out, then orders the result by preferred time. It also sorts, filters, detects conflicts, completes recurring tasks, and explains the plan (see Smarter Scheduling below).
 
-`main.py` is a terminal demo of these classes. The Streamlit UI in `app.py` is not connected to them yet.
+`main.py` is a terminal demo of these classes. The Streamlit UI in `app.py` imports them and keeps one `Owner` in `st.session_state`, so pets and tasks you add persist across reruns. Run it with `streamlit run app.py`.
 
-Known limits: `frequency` is stored but recurring tasks are not generated, and `Owner.preferences` is not used by the scheduler yet.
+Known limit: `Owner.preferences` is not used by the scheduler yet.
 
 ## 🧪 Testing PawPal+
 
@@ -96,23 +122,24 @@ pytest --cov
 Sample test output:
 
 ```
-collected 6 items
+collected 14 items
 
-tests/test_pawpal.py ......                                              [100%]
+tests/test_pawpal.py ..............                                      [100%]
 
-============================== 6 passed in 0.02s ===============================
+============================== 14 passed in 0.02s ===============================
 ```
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
-
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()` | Orders tasks by `"HH:MM"` preferred time using `sorted()` with a lambda key. Untimed tasks go last, and ties keep their existing (priority) order because the sort is stable. `generate_plan()` uses it for the final plan. |
+| Filtering | `Scheduler.filter_tasks(pet_name, completed)` | Returns tasks for one pet, one completion status, or both. Either argument left as `None` means no filter on it. |
+| Conflict handling | `Scheduler.detect_conflicts()`, `Scheduler.conflict_warnings()` | Compares every pair of planned, timed tasks and flags any whose start-to-end windows overlap (same pet or different pets). `conflict_warnings()` returns readable messages, so nothing crashes. Back-to-back tasks (8:00 for 30 min, then 8:30) are not a conflict. |
+| Recurring tasks | `Task.mark_complete()`, `Scheduler.mark_task_complete()` | Completing a `daily` or `weekly` task returns a fresh copy due today + 1 day (or + 7 days) via `timedelta`, and the scheduler adds it to the same pet. Completing a task twice does not create a duplicate. |
+| Due dates | `Scheduler.generate_plan()` | Only tasks due today or earlier are planned, so tomorrow's recurring copy does not show up in today's plan. |
+
+Tradeoff: conflicts are only reported, not resolved, and only tasks that made it into the plan are checked. See `reflection.md`, section 2b.
 
 ## 📸 Demo Walkthrough
 

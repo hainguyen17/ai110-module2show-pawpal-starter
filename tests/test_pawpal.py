@@ -1,3 +1,5 @@
+from datetime import date
+
 from pawpal_system import Owner, Pet, Scheduler, Task
 
 
@@ -70,3 +72,101 @@ def test_detect_conflicts_flags_overlapping_times():
     conflicts = Scheduler(owner).detect_conflicts()
 
     assert conflicts == [(walk, feed)]
+
+
+def _owner_with_pets():
+    owner = Owner("Jordan", 240)
+    dog, cat = Pet("Mochi", "dog"), Pet("Luna", "cat")
+    owner.add_pet(dog)
+    owner.add_pet(cat)
+    return owner, dog, cat
+
+
+def test_sort_by_time_orders_hhmm_and_puts_untimed_last():
+    owner, dog, _ = _owner_with_pets()
+    for title, time in [("Evening", "18:00"), ("Untimed", None), ("Early", "07:30"), ("Noon", "12:00")]:
+        dog.add_task(Task(title, 10, preferred_time=time))
+
+    ordered = Scheduler(owner).sort_by_time()
+
+    assert [t.title for t in ordered] == ["Early", "Noon", "Evening", "Untimed"]
+
+
+def test_filter_tasks_by_pet_and_status():
+    owner, dog, cat = _owner_with_pets()
+    walk, feed = Task("Walk", 30), Task("Feeding", 10)
+    dog.add_task(walk)
+    cat.add_task(feed)
+    walk.mark_complete()
+    scheduler = Scheduler(owner)
+
+    assert scheduler.filter_tasks(pet_name="Luna") == [feed]
+    assert scheduler.filter_tasks(completed=True) == [walk]
+    assert scheduler.filter_tasks(pet_name="Mochi", completed=False) == []
+
+
+def test_completing_daily_task_creates_next_day_copy():
+    owner, dog, _ = _owner_with_pets()
+    today = date(2026, 10, 20)
+    walk = Task("Walk", 30, frequency="daily", due_date=today)
+    dog.add_task(walk)
+
+    next_task = Scheduler(owner, today).mark_task_complete(walk)
+
+    assert walk.completed is True
+    assert next_task.due_date == date(2026, 10, 21)
+    assert next_task.completed is False
+    assert next_task in dog.tasks
+
+
+def test_completing_weekly_task_creates_copy_seven_days_out():
+    owner, dog, _ = _owner_with_pets()
+    today = date(2026, 10, 20)
+    bath = Task("Bath", 30, frequency="weekly", due_date=today)
+    dog.add_task(bath)
+
+    next_task = Scheduler(owner, today).mark_task_complete(bath)
+
+    assert next_task.due_date == date(2026, 10, 27)
+
+
+def test_completing_one_off_or_already_done_task_creates_nothing():
+    owner, dog, _ = _owner_with_pets()
+    once = Task("Vet visit", 60)
+    daily = Task("Walk", 30, frequency="daily")
+    dog.add_task(once)
+    dog.add_task(daily)
+    scheduler = Scheduler(owner)
+
+    assert scheduler.mark_task_complete(once) is None
+    scheduler.mark_task_complete(daily)
+    assert scheduler.mark_task_complete(daily) is None  # second completion adds no duplicate
+    assert len(dog.tasks) == 3
+
+
+def test_future_dated_task_is_not_in_todays_plan():
+    owner, dog, _ = _owner_with_pets()
+    today = date(2026, 10, 20)
+    dog.add_task(Task("Walk", 30, due_date=date(2026, 10, 21)))
+
+    assert Scheduler(owner, today).generate_plan() == []
+
+
+def test_conflict_warning_for_same_time_across_pets():
+    owner, dog, cat = _owner_with_pets()
+    dog.add_task(Task("Walk", 30, preferred_time="08:00"))
+    cat.add_task(Task("Feeding", 10, preferred_time="08:00"))
+
+    warnings = Scheduler(owner).conflict_warnings()
+
+    assert len(warnings) == 1
+    assert "Walk" in warnings[0] and "Feeding" in warnings[0]
+    assert "Mochi" in warnings[0] and "Luna" in warnings[0]
+
+
+def test_back_to_back_tasks_do_not_conflict():
+    owner, dog, _ = _owner_with_pets()
+    dog.add_task(Task("Walk", 30, preferred_time="08:00"))
+    dog.add_task(Task("Feeding", 10, preferred_time="08:30"))
+
+    assert Scheduler(owner).conflict_warnings() == []
