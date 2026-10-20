@@ -29,8 +29,10 @@ classDiagram
 
     class Scheduler {
         +Owner owner
+        +list~Task~ skipped
         +generate_plan() list~Task~
-        +detect_conflicts() list
+        +detect_conflicts() list~tuple~
+        +pet_name_for(task) str
         +explain_plan() str
     }
 

@@ -44,15 +44,44 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
+Output of `python main.py` (owner Jordan, 90 minutes available, two pets):
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+Today's Schedule for Jordan (80/90 min used)
+--------------------------------------------------------
+08:00  Morning walk       Mochi   30 min  [high]
+08:15  Feeding            Luna    10 min  [high]
+12:00  Give medication    Luna     5 min  [high]
+18:00  Brush coat         Mochi   20 min  [low]
+19:00  Laser play         Luna    15 min  [medium]
+
+Skipped (not enough time):
+  Training session (Mochi, 45 min)
+
+Time conflicts:
+  Morning walk (08:00) overlaps Feeding (08:15)
+
+Why this plan:
+- Give medication (Luna): scheduled: high priority, fits (85 min left)
+- Feeding (Luna): scheduled: high priority, fits (75 min left)
+- Morning walk (Mochi): scheduled: high priority, fits (45 min left)
+- Laser play (Luna): scheduled: medium priority, fits (30 min left)
+- Training session (Mochi): skipped: needs 45 min but only 30 min left
+- Brush coat (Mochi): scheduled: low priority, fits (10 min left)
 ```
+
+## 🧩 Implementation Summary
+
+The logic layer lives in `pawpal_system.py` and has four classes:
+
+- **Task** (dataclass): one care activity with a title, duration, priority, optional preferred time (`HH:MM`), frequency and completion flag.
+- **Pet** (dataclass): a pet's name and species, plus its list of tasks.
+- **Owner** (dataclass): the daily time budget and the owner's pets. `get_all_tasks()` returns every pet's tasks together.
+- **Scheduler**: reads tasks through `Owner.get_all_tasks()`, so it plans across all pets. `generate_plan()` takes pending tasks by priority (then shortest first) until the time budget runs out, then orders the result by preferred time. `detect_conflicts()` finds overlapping slots, and `explain_plan()` says why each task was scheduled or skipped.
+
+`main.py` is a terminal demo of these classes. The Streamlit UI in `app.py` is not connected to them yet.
+
+Known limits: `frequency` is stored but recurring tasks are not generated, and `Owner.preferences` is not used by the scheduler yet.
 
 ## 🧪 Testing PawPal+
 
@@ -67,7 +96,11 @@ pytest --cov
 Sample test output:
 
 ```
-# Paste your pytest output here
+collected 6 items
+
+tests/test_pawpal.py ......                                              [100%]
+
+============================== 6 passed in 0.02s ===============================
 ```
 
 ## 📐 Smarter Scheduling
